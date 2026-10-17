@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Bottle Flip – a fun browser game. Click or tap to flip a bottle and land it upright to score points!" />
+  <title>Bottle Flip</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════ START SCREEN ═══════════ -->
+  <div id="screen-start" class="screen active">
+    <div class="stars-bg"></div>
+    <div class="start-card glass-card">
+      <div class="logo-wrap">
+        <canvas id="logo-canvas" width="80" height="200"></canvas>
+        <h1 class="game-title">Bottle<br/><span class="accent">Flip</span></h1>
+      </div>
+      <p class="subtitle">Hold &amp; Release <kbd>Space</kbd> to Flip!<br/>Time your hold for the perfect landing!</p>
+      <button id="btn-play" class="btn btn-primary">🎮 Play Now</button>
+      <div class="best-display">Best Score: <span id="start-best-val">0</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════════ GAME SCREEN ═══════════ -->
+  <div id="screen-game" class="screen">
+    <div class="hud">
+      <div class="hud-score">
+        <span class="hud-label">Score</span>
+        <span class="hud-value" id="hud-score">0</span>
+      </div>
+      <button id="btn-mute" class="btn-icon" title="Toggle Sound">🔊</button>
+      <div class="hud-score">
+        <span class="hud-label">Best</span>
+        <span class="hud-value" id="hud-best">0</span>
+      </div>
+    </div>
+    <div class="arena-wrap">
+      <canvas id="game-canvas"></canvas>
+    </div>
+    <div class="hint-bar" id="hint-bar">
+      Hold &amp; release <kbd>Space</kbd> (or tap &amp; hold) to flip!
+    </div>
+  </div>
+
+  <!-- ═══════════ GAME OVER SCREEN ═══════════ -->
+  <div id="screen-over" class="screen">
+    <div class="over-card glass-card">
+      <div class="over-emoji" id="over-emoji">😬</div>
+      <h2 class="over-title" id="over-title">Oops!</h2>
+      <p class="over-msg"  id="over-msg">The bottle fell over.</p>
+      <div class="over-scores">
+        <div class="score-block">
+          <span class="score-label">Score</span>
+          <span class="score-val" id="over-score">0</span>
+        </div>
+        <div class="score-divider"></div>
+        <div class="score-block">
+          <span class="score-label">Best</span>
+          <span class="score-val highlight" id="over-best">0</span>
+        </div>
+      </div>
+      <div class="new-best-badge" id="new-best-badge">🏆 New Best!</div>
+      <button id="btn-retry" class="btn btn-primary">🔄 Try Again</button>
+      <button id="btn-home"  class="btn btn-secondary">🏠 Home</button>
+    </div>
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
