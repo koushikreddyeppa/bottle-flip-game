@@ -9,25 +9,25 @@
 //  Constants & Config
 // ─────────────────────────────────────────────────────────────
 const CFG = {
-  gravity:          0.42,       // px/frame²
-  flipVyMin:        -18,        // min vertical impulse  (simplified: narrower range)
-  flipVyMax:        -20,        // max vertical impulse
-  flipVxRange:      0.4,        // ±horizontal wobble   (almost straight up)
-  flipOmegaMin:     7.2,        // min angular velocity (deg/frame)
-  flipOmegaMax:     8.2,        // max angular velocity – tight = predictable spin
-  airDampOmega:     0.997,      // rotational air resistance
-  airDampVx:        0.992,
+  gravity:          0.38,       // px/frame² (tuned for landscape horizontal arc)
+  flipVyMin:        -13,        // base vertical impulse
+  flipVyMax:        -16,
+  flipVxRange:      0.4,
+  flipOmegaMin:     7.2,
+  flipOmegaMax:     8.2,
+  airDampOmega:     0.998,      // rotational air resistance
+  airDampVx:        0.996,      // minimal horizontal drag for clean horizontal travel
   bounceEnergy:     0.22,       // coefficient of restitution
   floorBounce:      0.12,
-  uprightTol:       28,         // slightly more forgiving upright window
+  uprightTol:       28,
   sideDownTol:      68,
   settleVThresh:    1.5,
   settleOmegaThresh:0.9,
-  platformW:        360,        // wider platform base size
-  platformH:        22,
-  bottleW:          44,
-  bottleH:          140,
-  uprightWindow:    28,         // match uprightTol
+  platformW:        480,        // wide table
+  platformH:        24,
+  bottleW:          36,         // sleek Kinley bottle in landscape
+  bottleH:          116,
+  uprightWindow:    28,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ let animFrame     = null;
 let settleTimer   = 0;
 let confettiPieces = [];
 let particles     = [];
+let flightTrail   = []; // trajectory dots during flip flight
 let shakeTimer    = 0;
 let lastInputTime = 0;
 
@@ -170,30 +171,28 @@ function initCanvas() {
 }
 
 function resizeCanvas() {
-  // Fit inside viewport, keep portrait feel
+  // Widescreen landscape view (16:9)
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const ratio = 9 / 16;
+  const targetRatio = 16 / 9;
 
   let cw, ch;
-  if (vw / vh < ratio) {
-    cw = vw;
-    ch = vw / ratio;
-  } else {
+  if (vw / vh > targetRatio) {
     ch = vh;
-    cw = vh * ratio;
+    cw = vh * targetRatio;
+  } else {
+    cw = vw;
+    ch = vw / targetRatio;
   }
 
-  // Clamp landscape
-  cw = Math.min(cw, vw);
-  ch = Math.min(ch, vh);
-  cw = Math.max(cw, 280);
-  ch = Math.max(ch, 400);
+  // Ensure minimum landscape size and integer pixels
+  cw = Math.round(Math.min(cw, vw));
+  ch = Math.round(Math.min(ch, vh));
 
-  canvas.width  = Math.round(cw);
-  canvas.height = Math.round(ch);
-  canvas.style.width  = Math.round(cw) + 'px';
-  canvas.style.height = Math.round(ch) + 'px';
+  canvas.width  = Math.max(720, cw);
+  canvas.height = Math.max(405, ch);
+  canvas.style.width  = cw + 'px';
+  canvas.style.height = ch + 'px';
 
   W = canvas.width;
   H = canvas.height;
@@ -202,17 +201,17 @@ function resizeCanvas() {
 }
 
 function setupLayout() {
-  // ── Landing table: big, right-of-centre ──
-  platform.h = Math.max(20, H * 0.038);
-  platform.w = Math.min(W * 0.80, W * 0.78);
-  platform.x = W * 0.18;
+  // ── Landing dining table: wide platform on the right ──
+  platform.h = Math.max(22, H * 0.045);
+  platform.w = W * 0.52;
+  platform.x = W * 0.40;
   platform.y = H * 0.72;
 
-  // ── Launch stand: small pedestal, left side ──
-  stand.r    = CFG.bottleW / 2 + Math.round(W * 0.025);  // just wider than bottle
+  // ── Launch stand: circular pedestal on the left with clear horizontal gap to table ──
+  stand.r    = CFG.bottleW / 2 + Math.round(W * 0.014);
   stand.h    = H * 0.055;
-  stand.x    = W * 0.18;          // left side, off table
-  stand.topY = platform.y - stand.h;  // stand surface aligns with table height
+  stand.x    = W * 0.16;
+  stand.topY = platform.y - stand.h;
 
   if (state === State.IDLE || state === State.LANDED) {
     resetBottle();
@@ -315,16 +314,14 @@ function launchFlip(holdSec) {
   const diff = _nextDifficulty();
 
   // 1. Vertical Impulse (vy) & Air Flight Time
-  // Sweet spot gives ~ -19 px/frame
-  // Short tap gives ~ -11.5 px/frame (low hop)
-  // Long hold gives ~ -24.5 px/frame (huge launch)
-  const baseVy = -19;
-  const vy = (baseVy * Math.pow(ratio, 0.48)) + (Math.random() - 0.5) * 0.6;
+  // Base vy is tuned for a sweeping horizontal landscape arc
+  const baseVy = -14.2;
+  const vy = (baseVy * Math.pow(ratio, 0.45)) + (Math.random() - 0.5) * 0.4;
   const estFlight = (2 * Math.abs(vy)) / CFG.gravity;
 
   // 2. Length of the Flip (horizontal travel distance vx across the table)
-  // Short hold: lands short (front edge of table or drops into gap)
-  // Sweet hold: lands in the table center
+  // Short hold: lands short (gap between stand and table, or front edge)
+  // Sweet hold: lands cleanly in the table center
   // Long hold: overshoots towards the far edge or off the table
   const tableCentreX  = platform.x + platform.w * 0.5;
   const idealDistance = tableCentreX - stand.x;
@@ -334,7 +331,7 @@ function launchFlip(holdSec) {
   const edgeSign = Math.random() < 0.5 ? 1 : -1;
   const edgePush = diff.vxBias * edgeSign * (platform.w * 0.012);
   const baseVx   = (targetX - stand.x) / estFlight;
-  const vx       = baseVx + (Math.random() - 0.5) * 0.12 + edgePush;
+  const vx       = baseVx + (Math.random() - 0.5) * 0.10 + edgePush;
 
   // 3. Flip Rotation (angular velocity omega)
   // Ideal upright landing requires completing ~720° (2 full spins).
@@ -360,6 +357,7 @@ function launchFlip(holdSec) {
 
   state = State.FLIPPING;
   settleTimer = 0;
+  flightTrail = []; // reset flight trail dots
 
   // Launch sound power scales with hold duration
   const soundPower = Math.min(1.4, 0.7 + ratio * 0.45);
@@ -392,6 +390,17 @@ function physicsTick() {
 
   // Normalise angle to [-180, 180)
   bottle.angle = ((bottle.angle + 180) % 360 + 360) % 360 - 180;
+
+  // Record flight trajectory dots while traveling horizontally in air
+  if (state === State.FLIPPING) {
+    flightTrail.push({
+      x: bottle.x,
+      y: bottle.y,
+      alpha: 0.88,
+      size: 3.8,
+      color: '#38f9d7'
+    });
+  }
 
   // ── Platform collision ──
   const pfTop = platform.y;
@@ -601,6 +610,13 @@ function updateParticles() {
     p.life -= p.decay;
     return p.life > 0;
   });
+
+  // Fade and shrink flight trajectory trail dots
+  flightTrail.forEach(d => {
+    d.alpha -= 0.024;
+    d.size = Math.max(1.2, d.size * 0.985);
+  });
+  flightTrail = flightTrail.filter(d => d.alpha > 0);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -624,11 +640,120 @@ function render() {
 
   drawTable();
   drawStand();
+  drawTrajectoryDots(); // Trajectory dots (predictive arc & in-flight trail)
   drawParticles();
   drawBottle();
   drawStateOverlay();
 
   if (shakeTimer > 0) ctx.restore();
+}
+
+// ── Trajectory Dots (Predictive Dotted Arc & In-Flight Trail) ──
+function drawTrajectoryDots() {
+  // 1. Predictive trajectory dots when on the stand (State.IDLE)
+  if (state === State.IDLE) {
+    const ratio = isCharging
+      ? Math.max(0.28, Math.min(currentCharge, 1.80))
+      : 1.0;
+
+    const isGuideOnly = !isCharging;
+
+    const baseVy = -14.2;
+    const simVy0 = baseVy * Math.pow(ratio, 0.45);
+    const estFlight = (2 * Math.abs(simVy0)) / CFG.gravity;
+
+    const tableCentreX  = platform.x + platform.w * 0.5;
+    const idealDistance = tableCentreX - stand.x;
+    const distanceFactor = 0.35 + 0.65 * ratio;
+    const simTargetX    = stand.x + idealDistance * distanceFactor;
+    const simVx0        = (simTargetX - stand.x) / estFlight;
+
+    let sx = bottle.x;
+    let sy = bottle.y;
+    let svx = simVx0;
+    let svy = simVy0;
+
+    const isSweet = ratio >= 0.80 && ratio <= 1.22;
+    const isOver  = ratio > 1.22;
+
+    let dotColor;
+    if (isGuideOnly) {
+      dotColor = 'rgba(255, 255, 255, 0.28)';
+    } else if (isOver) {
+      dotColor = '#ff6b6b';
+    } else if (isSweet) {
+      dotColor = '#43e97b';
+    } else {
+      dotColor = '#f7c948';
+    }
+
+    const totalSteps = Math.round(estFlight);
+    ctx.save();
+
+    for (let i = 1; i <= totalSteps; i++) {
+      svy += CFG.gravity;
+      svx *= CFG.airDampVx;
+      sx += svx;
+      sy += svy;
+
+      // Draw dot every 3 simulation frames
+      if (i % 3 === 0) {
+        const prog = i / totalSteps;
+        const dotRadius = isGuideOnly ? 2.5 : (3.5 + Math.sin(prog * Math.PI) * 1.5);
+        const dotAlpha  = isGuideOnly ? (0.22 + 0.15 * Math.sin(prog * Math.PI)) : (0.75 + 0.25 * Math.sin(prog * Math.PI));
+
+        ctx.globalAlpha = dotAlpha;
+        ctx.fillStyle = dotColor;
+        if (!isGuideOnly) {
+          ctx.shadowColor = dotColor;
+          ctx.shadowBlur = 8;
+        }
+        ctx.beginPath();
+        ctx.arc(sx, sy, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Check collision with platform surface
+      if (sy >= platform.y && sx >= platform.x - 10) {
+        // Target landing dot on the table
+        const ringAlpha = isGuideOnly ? 0.35 : 0.88;
+        ctx.globalAlpha = ringAlpha;
+        ctx.fillStyle = dotColor;
+        if (!isGuideOnly) {
+          ctx.shadowColor = dotColor;
+          ctx.shadowBlur = 12;
+        }
+        // Center landing dot
+        ctx.beginPath();
+        ctx.arc(sx, platform.y, isGuideOnly ? 4 : 5.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Target ring
+        ctx.strokeStyle = dotColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(sx, platform.y, isGuideOnly ? 8 : 11, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+    }
+    ctx.restore();
+  }
+
+  // 2. Flight Trajectory Dots (fading trail left behind while flipping)
+  if (flightTrail.length > 0) {
+    ctx.save();
+    flightTrail.forEach(dot => {
+      if (dot.alpha <= 0) return;
+      ctx.globalAlpha = dot.alpha;
+      ctx.fillStyle = dot.color || '#38f9d7';
+      ctx.shadowColor = dot.color || '#38f9d7';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, dot.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
 }
 
 // No-op kept for compatibility (startGame calls initStars)
